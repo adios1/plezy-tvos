@@ -1,0 +1,44 @@
+name: tvOS build
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: chmod +x scripts/*.sh && scripts/codegen.sh
+
+      - name: Show tvOS scripts
+        run: |
+          ls -la tvos/scripts
+          head -n 40 tvos/scripts/* || true
+
+      - name: Pods
+        run: cd tvos && pod install
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -workspace tvos/Runner.xcworkspace \
+            -scheme Runner \
+            -destination 'generic/platform=tvOS' \
+            -archivePath build/Runner.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package IPA
+        run: |
+          mkdir Payload
+          cp -R build/Runner.xcarchive/Products/Applications/*.app Payload/
+          zip -r plezy-tvos.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plezy-tvos
+          path: plezy-tvos.ipa
